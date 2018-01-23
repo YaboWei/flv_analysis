@@ -1,0 +1,1 @@
+#define FLV_ANALYSIS_VERSION "0.1.0"
