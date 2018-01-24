@@ -41,14 +41,14 @@ static int analysis_header()
     return 0;
 }
 
-static int analysis_audio_tag_header(const uint8_t* tag_header)
+static int analysis_audio_tag_data(const uint8_t* tag_data, uint32_t tag_size)
 {
-    uint8_t SoundFormat = (tag_header[0] & 0xf0) >> 4;
-    uint8_t SoundRate   = (tag_header[0] & 0x0c) >> 2;
-    uint8_t SoundSize   = (tag_header[0] & 0x02) >> 1;
-    uint8_t SoundType   = tag_header[0] & 0x01;
+    uint8_t SoundFormat = (tag_data[0] & 0xf0) >> 4;
+    uint8_t SoundRate   = (tag_data[0] & 0x0c) >> 2;
+    uint8_t SoundSize   = (tag_data[0] & 0x02) >> 1;
+    uint8_t SoundType   = tag_data[0] & 0x01;
 
-    uint8_t AACPacketType = tag_header[1];
+    uint8_t AACPacketType = tag_data[1];
 
     char tag_header_desc[100];
     snprintf(tag_header_desc, sizeof(tag_header_desc),
@@ -61,7 +61,7 @@ static int analysis_audio_tag_header(const uint8_t* tag_header)
 
     write(oanls_fd, tag_header_desc, strlen(tag_header_desc));
 
-    return 2;
+    return 0;
 }
 
 static int analysis_video_tag_data(const uint8_t* tag_data, uint32_t tag_size)
@@ -97,18 +97,22 @@ static int analysis_video_tag_data(const uint8_t* tag_data, uint32_t tag_size)
     while (index < tag_size - header_size) {
         uint32_t nal_size = (tag_data[index] << 24) + (tag_data[index+1] << 16) + (tag_data[index+2] << 8) + tag_data[index+3];
         uint8_t nal_type = tag_data[index+4] & 0x1f;
-        index += nal_size + 4;
-        char nal_desc[100] = {0};
-        snprintf(nal_desc, sizeof(nal_desc), "        nal_type:%s(%u), nal_size:%u\n",
-                avc_nal_unit_type_name(nal_type), nal_type, nal_size);
+        index += 4;
+        char nal_desc[1024] = {0};
+        snprintf(nal_desc + strlen(nal_desc), sizeof(nal_desc) - strlen(nal_desc), "        nal_type:%2u, nal_size:%7u",
+                nal_type, nal_size);
+
+#define NALU_DATA_MAX_DUMP_SIZE 32
+        snprintf(nal_desc + strlen(nal_desc), sizeof(nal_desc) - strlen(nal_desc), ", nal_data:");
+        int dump_size = nal_size < NALU_DATA_MAX_DUMP_SIZE ? nal_size : NALU_DATA_MAX_DUMP_SIZE;
+        for (int i = 0; i < dump_size; i++) {
+            snprintf(nal_desc + strlen(nal_desc), sizeof(nal_desc) - strlen(nal_desc), "%2x%c",
+                    tag_data[index+i], i < dump_size-1 ? ' ' : '\n');
+        }
         write(oanls_fd, nal_desc, strlen(nal_desc));
+        index += nal_size;
     }
 
-    return 0;
-}
-
-static int analysis_audio_tag_data(const uint8_t* tag_data)
-{
     return 0;
 }
 
@@ -149,19 +153,23 @@ static int analysis_tag()
             tag_type_name(tag_type), tag_size, (uint32_t)pos, pos);
     write(oanls_fd, tag_header_desc, strlen(tag_header_desc));
 
-    int tag_head_size = 0;
     if (tag_type == FLV_TAG_TYPE_AUDIO) {
-        tag_head_size = analysis_audio_tag_header(tag_data);
-        analysis_audio_tag_data(tag_data+tag_head_size);
+        analysis_audio_tag_data(tag_data, tag_size);
     } else if (tag_type == FLV_TAG_TYPE_VIDEO) {
         analysis_video_tag_data(tag_data, tag_size);
     }
 
-    uint32_t pre_tag_size;
-    if (read(iflv_fd, &pre_tag_size, FLV_TAGSIZE_SIZE) != FLV_TAGSIZE_SIZE) {
-        fprintf(stderr, "read flv pre tag size failed: %s(%d)\n", strerror(errno), errno);
+    uint32_t pre_tag_size = 0;
+    uint8_t pre_tag_size_data[4] = {0};
+    char pre_tag_size_str[100] = {0};
+    if ((size = read(iflv_fd, pre_tag_size_data, FLV_TAGSIZE_SIZE)) != FLV_TAGSIZE_SIZE) {
+        fprintf(stderr, "read flv pre tag size failed: %s(%d), wants:%d, got:%d\n", strerror(errno), errno, FLV_TAGSIZE_SIZE, size);
         return errno;
     }
+    pre_tag_size = (pre_tag_size_data[0] << 24) + (pre_tag_size_data[1] << 16) + (pre_tag_size_data[2] << 8) + pre_tag_size_data[3];
+
+    snprintf(pre_tag_size_str, sizeof(pre_tag_size_str), "PreviousTagSize:0x%x(%u)\n", pre_tag_size, pre_tag_size);
+    write(oanls_fd, pre_tag_size_str, strlen(pre_tag_size_str));
 
     return 0;
 }
