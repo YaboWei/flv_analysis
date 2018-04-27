@@ -31,6 +31,8 @@
 
 #define SPLIT_LINE "---------------------------------------------\n"
 
+#define ERR_INPUT_EOF 100
+
 int analysis();
 
 #endif //FLV_ANALYSIS_H
