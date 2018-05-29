@@ -154,6 +154,7 @@ static int analysis_tag()
 
     uint8_t tag_type = tag_header[0] & 0x1f;
     uint32_t tag_size = (tag_header[1] << 16) + (tag_header[2] << 8) + (tag_header[3]);
+    int64_t tag_ts = (tag_header[4] << 16) + (tag_header[5] << 8) + (tag_header[6]);
 
     uint8_t* tag_data = (uint8_t*)malloc(tag_size);
     if (tag_data == NULL) {
@@ -171,8 +172,8 @@ static int analysis_tag()
 
     char tag_header_desc[100] = {0};
     snprintf(tag_header_desc, sizeof(tag_header_desc),
-            "FLV Tag:\n    type:%s, size:%u, pos:0x%x(%u)\n",
-            tag_type_name(tag_type), tag_size, (uint32_t)pos, pos);
+            "FLV Tag:\n    type:%s, size:%u, ts: %ld, rpos:0x%x(%u)\n",
+            tag_type_name(tag_type), tag_size, tag_ts, (uint32_t)pos, pos);
     write(oanls_fd, tag_header_desc, strlen(tag_header_desc));
 
     if (tag_type == FLV_TAG_TYPE_AUDIO) {
