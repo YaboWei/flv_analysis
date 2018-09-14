@@ -109,17 +109,17 @@ static int analysis_video_tag_data(const uint8_t* tag_data, uint32_t tag_size)
         return 0;
     }
 
+    write(oanls_fd, "nals:\n", strlen("nals:\n"));
     // One or more NALUs (Full frames are required)
     while (index < tag_size - header_size) {
-        write(oanls_fd, "nals:\n", strlen("nals:\n"));
         uint32_t nal_size = (tag_data[index] << 24) + (tag_data[index+1] << 16) + (tag_data[index+2] << 8) + tag_data[index+3];
         uint8_t nal_type = tag_data[index+4] & 0x1f;
-        index += 4;
+        index += 4 + 1;
         char nal_desc[1024] = {0};
-        snprintf(nal_desc + strlen(nal_desc), sizeof(nal_desc) - strlen(nal_desc), "    nal_type:%u, nal_size:%u\n",
+        snprintf(nal_desc + strlen(nal_desc), sizeof(nal_desc) - strlen(nal_desc), "    tp:%u,size:%u,",
                 nal_type, nal_size);
 
-        snprintf(nal_desc + strlen(nal_desc), sizeof(nal_desc) - strlen(nal_desc), "    nal_data:");
+        snprintf(nal_desc + strlen(nal_desc), sizeof(nal_desc) - strlen(nal_desc), "data:");
         int dump_size = nal_size < NALU_DATA_MAX_DUMP_SIZE ? nal_size : NALU_DATA_MAX_DUMP_SIZE;
         for (int i = 0; i < dump_size; i++) {
             snprintf(nal_desc + strlen(nal_desc), sizeof(nal_desc) - strlen(nal_desc), "%2x%c",
