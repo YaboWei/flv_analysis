@@ -114,14 +114,14 @@ static int analysis_video_tag_data(const uint8_t* tag_data, uint32_t tag_size)
     while (index < tag_size - header_size) {
         uint32_t nal_size = (tag_data[index] << 24) + (tag_data[index+1] << 16) + (tag_data[index+2] << 8) + tag_data[index+3];
         uint8_t nal_type = tag_data[index+4] & 0x1f;
-        index += 4 + 1;
+        index += 4;
         char nal_desc[1024] = {0};
         snprintf(nal_desc + strlen(nal_desc), sizeof(nal_desc) - strlen(nal_desc), "    tp:%u,size:%u,",
                 nal_type, nal_size);
 
         snprintf(nal_desc + strlen(nal_desc), sizeof(nal_desc) - strlen(nal_desc), "data:");
         int dump_size = nal_size < NALU_DATA_MAX_DUMP_SIZE ? nal_size : NALU_DATA_MAX_DUMP_SIZE;
-        for (int i = 0; i < dump_size; i++) {
+        for (int i = 1; i < dump_size; i++) {
             snprintf(nal_desc + strlen(nal_desc), sizeof(nal_desc) - strlen(nal_desc), "%2x%c",
                     tag_data[index+i], i < dump_size-1 ? ' ' : '\n');
         }
