@@ -29,6 +29,14 @@
 #define AVC_NAL_UNIT_TYPE_PPS 8
 #define AVC_NAL_UNIT_TYPE_AUD 9
 
+#define FLV_DATA_VALUE_TYPE_NUMBER 0
+#define FLV_DATA_VALUE_TYPE_BOOLEAN 1
+#define FLV_DATA_VALUE_TYPE_STRING 2
+#define FLV_DATA_VALUE_TYPE_OBJECT 3
+#define FLV_DATA_VALUE_TYPE_ECMA 8
+#define FLV_DATA_VALUE_TYPE_LONGSTRING 12
+#define BREAK_UNSUPPORTTED_DATA_TYPE "break unsupported data type: %d"
+
 #define SPLIT_LINE "---------------------------------------------\n"
 
 #define ERR_INPUT_EOF 100

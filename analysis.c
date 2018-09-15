@@ -9,6 +9,7 @@
 
 #include "analysis.h"
 #include "utils.h"
+#include "bytesread.h"
 
 int iflv_fd = 0; // input flv file
 int oanls_fd = 1; // output analysis file, default stdout
@@ -132,6 +133,98 @@ static int analysis_video_tag_data(const uint8_t* tag_data, uint32_t tag_size)
     return 0;
 }
 
+static int analysis_data_number(uint8_t** data)
+{
+    char number[32] = {0};
+    snprintf(number, sizeof(number), "%lf", read_8bytes_to_double(*data));
+    write(oanls_fd, number, strlen(number));
+
+    *data += 8;
+    return 0;
+}
+
+static int analysis_data_boolean(uint8_t** data)
+{
+    uint8_t b = **data + '0';
+    *data += 1;
+    write(oanls_fd, &b, 1);
+    return 0;
+}
+
+static int analysis_data_string(uint8_t** data)
+{
+    uint32_t pro_name_len = read_2bytes_to_uint32(*data);
+    *data += 2;
+    write(oanls_fd, *data, pro_name_len);
+    *data += pro_name_len;
+    return 0;
+}
+
+static int analysis_data_longstring(uint8_t** data)
+{
+    uint32_t pro_name_len = (**data << 24) | (**(data+1) << 16) | (**(data+2) << 8) | **(data+3);
+    *data += 4;
+    write(oanls_fd, *data, pro_name_len);
+    *data += pro_name_len;
+    return 0;
+}
+
+static int analysis_data_ecma(uint8_t* ecma_data, uint32_t ecma_len)
+{
+    int ecma_id = 0;
+    char break_msg[32] = {0};
+    for (; ecma_id < ecma_len; ecma_id++) {
+        uint32_t pro_name_len = (*ecma_data << 8) | *(ecma_data+1);
+        ecma_data += 2;
+        write(oanls_fd, ecma_data, pro_name_len);
+        write(oanls_fd, ": ", 2);
+        ecma_data += pro_name_len;
+
+        uint8_t pro_value_tp = *(ecma_data++);
+
+        if (pro_value_tp == FLV_DATA_VALUE_TYPE_NUMBER) {
+            analysis_data_number(&ecma_data);
+        } else if (pro_value_tp == FLV_DATA_VALUE_TYPE_BOOLEAN) {
+            analysis_data_boolean(&ecma_data);
+        } else if (pro_value_tp == FLV_DATA_VALUE_TYPE_LONGSTRING) {
+            analysis_data_longstring(&ecma_data);
+        } else if (pro_value_tp == FLV_DATA_VALUE_TYPE_STRING) {
+            analysis_data_string(&ecma_data);
+        } else {
+            snprintf(break_msg, sizeof(break_msg),
+                    BREAK_UNSUPPORTTED_DATA_TYPE, pro_value_tp);
+            break;
+        }
+        write(oanls_fd, "\n", 1);
+    }
+
+    return 0;
+}
+
+static int analysis_data_tag_data(uint8_t* tag_data, uint32_t tag_size)
+{
+    int i = 0;
+    uint8_t name_tp = *(tag_data++);
+    char name[32] = {0};
+    if (name_tp != 2)
+        return 0;
+
+    uint32_t str_len = (*tag_data << 8) | *(tag_data+1);
+    tag_data += 2;
+    memcpy(name, tag_data, str_len);
+    tag_data += str_len;
+    write(oanls_fd, name, strlen(name));
+
+    uint8_t value_tp = *(tag_data++);
+    if (value_tp == FLV_DATA_VALUE_TYPE_ECMA) {
+        uint32_t ecma_len = (*tag_data << 24) | (*(tag_data+1) << 16) | (*(tag_data+2) << 8) | *(tag_data+3);
+        tag_data += 4;
+        analysis_data_ecma(tag_data, ecma_len);
+    }
+
+    return 0;
+}
+
 static int analysis_tag()
 {
     int size = 0;
@@ -153,8 +246,8 @@ static int analysis_tag()
     }
 
     uint8_t tag_type = tag_header[0] & 0x1f;
-    uint32_t tag_size = (tag_header[1] << 16) + (tag_header[2] << 8) + (tag_header[3]);
-    int64_t tag_ts = (tag_header[4] << 16) + (tag_header[5] << 8) + (tag_header[6]);
+    uint32_t tag_size = read_3bytes_to_uint32(&tag_header[1]);;
+    int64_t tag_ts = read_3bytes_to_uint32(&tag_header[4]);
 
     uint8_t* tag_data = (uint8_t*)malloc(tag_size);
     if (tag_data == NULL) {
@@ -172,15 +265,16 @@ static int analysis_tag()
 
     char tag_header_desc[100] = {0};
     snprintf(tag_header_desc, sizeof(tag_header_desc),
-            "FLV Tag:\n    type:%s, size:%u, ts: %ld, rpos:0x%x(%u)\n",
+            "FLV Tag:\n    type:%s, size:%u, ts: %lld, rpos:0x%x(%u)\n",
             tag_type_name(tag_type), tag_size, tag_ts, (uint32_t)pos, pos);
     write(oanls_fd, tag_header_desc, strlen(tag_header_desc));
 
-    if (tag_type == FLV_TAG_TYPE_AUDIO) {
+    if (tag_type == FLV_TAG_TYPE_AUDIO)
         analysis_audio_tag_data(tag_data, tag_size);
-    } else if (tag_type == FLV_TAG_TYPE_VIDEO) {
+    if (tag_type == FLV_TAG_TYPE_VIDEO)
         analysis_video_tag_data(tag_data, tag_size);
-    }
+    if (tag_type == FLV_TAG_TYPE_DATA)
+        analysis_data_tag_data(tag_data, tag_size);
 
     uint32_t pre_tag_size = 0;
     uint8_t pre_tag_size_data[4] = {0};
@@ -189,7 +283,7 @@ static int analysis_tag()
         fprintf(stderr, "read flv pre tag size failed: %s(%d), wants:%d, got:%d\n", strerror(errno), errno, FLV_TAGSIZE_SIZE, size);
         return errno;
     }
-    pre_tag_size = (pre_tag_size_data[0] << 24) + (pre_tag_size_data[1] << 16) + (pre_tag_size_data[2] << 8) + pre_tag_size_data[3];
+    pre_tag_size = read_4bytes_to_uint32(pre_tag_size_data);
 
     snprintf(pre_tag_size_str, sizeof(pre_tag_size_str), "PreviousTagSize:0x%x(%u)\n", pre_tag_size, pre_tag_size);
     write(oanls_fd, pre_tag_size_str, strlen(pre_tag_size_str));
