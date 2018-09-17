@@ -99,10 +99,11 @@ static int analysis_video_tag_data(const uint8_t* tag_data, uint32_t tag_size)
     if (AVCPacketType == 0) {
         //AVCDecoderConfigurationRecord
         write(oanls_fd, "sequence header:\n", strlen("sequence header:\n"));
+        int i = 0;
         int dump_size = (tag_size - header_size) < NALU_DATA_MAX_DUMP_SIZE ? (tag_size - header_size) : NALU_DATA_MAX_DUMP_SIZE;
         char nal_desc[1024] = {0};
         snprintf(nal_desc + strlen(nal_desc), sizeof(nal_desc) - strlen(nal_desc), "    ");
-        for (int i = 0; i < dump_size; i++) {
+        for (i = 0; i < dump_size; i++) {
             snprintf(nal_desc + strlen(nal_desc), sizeof(nal_desc) - strlen(nal_desc), "%2x%c",
                     tag_data[index+i], i < dump_size-1 ? ' ' : '\n');
         }
@@ -121,8 +122,9 @@ static int analysis_video_tag_data(const uint8_t* tag_data, uint32_t tag_size)
                 nal_type, nal_size);
 
         snprintf(nal_desc + strlen(nal_desc), sizeof(nal_desc) - strlen(nal_desc), "data:");
+        int i = 0;
         int dump_size = nal_size < NALU_DATA_MAX_DUMP_SIZE ? nal_size : NALU_DATA_MAX_DUMP_SIZE;
-        for (int i = 1; i < dump_size; i++) {
+        for (i = 1; i < dump_size; i++) {
             snprintf(nal_desc + strlen(nal_desc), sizeof(nal_desc) - strlen(nal_desc), "%2x%c",
                     tag_data[index+i], i < dump_size-1 ? ' ' : '\n');
         }
