@@ -35,7 +35,7 @@
 #define FLV_DATA_VALUE_TYPE_OBJECT 3
 #define FLV_DATA_VALUE_TYPE_ECMA 8
 #define FLV_DATA_VALUE_TYPE_LONGSTRING 12
-#define BREAK_UNSUPPORTTED_DATA_TYPE "break unsupported data type: %d"
+#define BREAK_UNSUPPORTTED_DATA_TYPE "break unsupported data type: %d\n"
 
 #define SPLIT_LINE "---------------------------------------------\n"
 

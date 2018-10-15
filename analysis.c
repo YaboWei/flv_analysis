@@ -203,6 +203,75 @@ static int analysis_data_ecma(uint8_t* ecma_data, uint32_t ecma_len)
     return 0;
 }
 
+static int print_data_pro_type(uint8_t tp)
+{
+    switch (tp) {
+        case FLV_DATA_VALUE_TYPE_STRING:
+            write(oanls_fd, "[string]", strlen("[string]"));
+            break;
+        case FLV_DATA_VALUE_TYPE_LONGSTRING:
+            write(oanls_fd, "[long string]", strlen("[long string]"));
+            break;
+        case FLV_DATA_VALUE_TYPE_NUMBER:
+            write(oanls_fd, "[number]", strlen("[number]"));
+            break;
+        case FLV_DATA_VALUE_TYPE_BOOLEAN:
+            write(oanls_fd, "[bollean]", strlen("[bolleam]"));
+            break;
+        case FLV_DATA_VALUE_TYPE_ECMA:
+            write(oanls_fd, "[ecma]", strlen("[ecma]"));
+            break;
+        case FLV_DATA_VALUE_TYPE_OBJECT:
+            write(oanls_fd, "[object]", strlen("[object]"));
+            break;
+        default:
+            write(oanls_fd, "[unknown]", strlen("[unknown]"));
+            break;
+    }
+
+    return 0;
+}
+
+static int analysis_data_object_pro(uint8_t** data)
+{
+    int ret = 0;
+    // pro name
+    analysis_data_string(data);
+
+    // pro value
+    uint8_t pro_value_tp = *((*data)++);
+    uint8_t tp_print = pro_value_tp + '0';
+    write(oanls_fd, ": ", 2);
+    if (pro_value_tp == FLV_DATA_VALUE_TYPE_STRING) {
+        analysis_data_string(data);
+    } else
+        return -1;
+
+    print_data_pro_type(pro_value_tp);
+
+    return 0;
+}
+
+static int analysis_data_object(uint8_t* data)
+{
+    int ret = 0;
+
+    while (1) {
+        uint32_t pro_name_len = read_2bytes_to_uint32(data);
+        if (pro_name_len == 0) {
+            // SCRIPTDATAOBJECTEND
+            break;
+        }
+
+        if ((ret = analysis_data_object_pro(&data)) != 0) {
+            break;
+        }
+        write(oanls_fd, "\n", 1);
+    }
+
+    return ret;
+}
+
 static int analysis_data_tag_data(uint8_t* tag_data, uint32_t tag_size)
 {
     int i = 0;
@@ -218,10 +287,20 @@ static int analysis_data_tag_data(uint8_t* tag_data, uint32_t tag_size)
     write(oanls_fd, name, strlen(name));
 
     uint8_t value_tp = *(tag_data++);
+    print_data_pro_type(value_tp);
+    write(oanls_fd, "\n", 1);
+
     if (value_tp == FLV_DATA_VALUE_TYPE_ECMA) {
         uint32_t ecma_len = (*tag_data << 24) | (*(tag_data+1) << 16) | (*(tag_data+2) << 8) | *(tag_data+3);
         tag_data += 4;
         analysis_data_ecma(tag_data, ecma_len);
+    } else if (value_tp == FLV_DATA_VALUE_TYPE_OBJECT) {
+        analysis_data_object(tag_data);
+    } else {
+        char break_msg[32] = {0};
+        snprintf(break_msg, sizeof(break_msg),
+                BREAK_UNSUPPORTTED_DATA_TYPE, value_tp);
+        write(oanls_fd, break_msg, strlen(break_msg));
     }
 
     return 0;
