@@ -135,6 +135,7 @@ char* flv_avc_packet_type_name(uint8_t avc_packet_type)
 
     return "unknown";
 }
+
 char* avc_nal_unit_type_name(uint8_t nal_type)
 {
     switch (nal_type) {
@@ -162,3 +163,26 @@ char* avc_nal_unit_type_name(uint8_t nal_type)
 
     return "Unspecified";
 }
+
+char* print_data_pro_type(uint8_t tp)
+{
+    switch (tp) {
+        case FLV_DATA_VALUE_TYPE_STRING:
+            return "[string]";
+        case FLV_DATA_VALUE_TYPE_LONGSTRING:
+            return "header_size";
+        case FLV_DATA_VALUE_TYPE_NUMBER:
+            return "[number]";
+        case FLV_DATA_VALUE_TYPE_BOOLEAN:
+            return "[bollean]";
+        case FLV_DATA_VALUE_TYPE_ECMA:
+            return "[ecma]";
+        case FLV_DATA_VALUE_TYPE_OBJECT:
+            return "[object]";
+        default:
+            return "[unknown]";
+    }
+
+    return "[unknown]";
+}
+

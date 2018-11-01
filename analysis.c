@@ -44,12 +44,15 @@ static int analysis_header()
 
 static int analysis_audio_tag_data(const uint8_t* tag_data, uint32_t tag_size)
 {
+    int header_size = 0;
     uint8_t SoundFormat = (tag_data[0] & 0xf0) >> 4;
     uint8_t SoundRate   = (tag_data[0] & 0x0c) >> 2;
     uint8_t SoundSize   = (tag_data[0] & 0x02) >> 1;
     uint8_t SoundType   = tag_data[0] & 0x01;
+    header_size += 1;
 
     uint8_t AACPacketType = tag_data[1];
+    header_size += 1;
 
     char tag_header_desc[100];
     snprintf(tag_header_desc, sizeof(tag_header_desc),
@@ -58,9 +61,23 @@ static int analysis_audio_tag_data(const uint8_t* tag_data, uint32_t tag_size)
             flv_sound_rate_name(SoundRate), SoundRate,
             flv_sound_size_name(SoundSize), SoundSize,
             flv_sound_type_name(SoundType), SoundType,
-            SoundFormat == 10 ? flv_aac_packet_type_name(SoundType) : "unused", SoundType);
+            SoundFormat == 10 ? flv_aac_packet_type_name(AACPacketType) : "unused", AACPacketType);
 
     write(oanls_fd, tag_header_desc, strlen(tag_header_desc));
+    int index = header_size;
+    if (AACPacketType == 0) {
+        write(oanls_fd, "sequence header:\n", strlen("sequence header:\n"));
+        int i = 0;
+        int dump_size = (tag_size - header_size) < NALU_DATA_MAX_DUMP_SIZE ? (tag_size - header_size) : NALU_DATA_MAX_DUMP_SIZE;
+        char nal_desc[1024] = {0};
+        snprintf(nal_desc + strlen(nal_desc), sizeof(nal_desc) - strlen(nal_desc), "    ");
+        for (i = 0; i < dump_size; i++) {
+            snprintf(nal_desc + strlen(nal_desc), sizeof(nal_desc) - strlen(nal_desc), "%2x%c",
+                    tag_data[index+i], i < dump_size-1 ? ' ' : '\n');
+        }
+        write(oanls_fd, nal_desc, strlen(nal_desc));
+        return 0;
+    }
 
     return 0;
 }
@@ -94,7 +111,6 @@ static int analysis_video_tag_data(const uint8_t* tag_data, uint32_t tag_size)
     }
 
 
-#define NALU_DATA_MAX_DUMP_SIZE 32
     int index = header_size;
     if (AVCPacketType == 0) {
         //AVCDecoderConfigurationRecord
@@ -197,36 +213,9 @@ static int analysis_data_ecma(uint8_t* ecma_data, uint32_t ecma_len)
                     BREAK_UNSUPPORTTED_DATA_TYPE, pro_value_tp);
             break;
         }
+        const char* tp_str = print_data_pro_type(pro_value_tp);
+        write(oanls_fd, tp_str, strlen(tp_str));
         write(oanls_fd, "\n", 1);
-    }
-
-    return 0;
-}
-
-static int print_data_pro_type(uint8_t tp)
-{
-    switch (tp) {
-        case FLV_DATA_VALUE_TYPE_STRING:
-            write(oanls_fd, "[string]", strlen("[string]"));
-            break;
-        case FLV_DATA_VALUE_TYPE_LONGSTRING:
-            write(oanls_fd, "[long string]", strlen("[long string]"));
-            break;
-        case FLV_DATA_VALUE_TYPE_NUMBER:
-            write(oanls_fd, "[number]", strlen("[number]"));
-            break;
-        case FLV_DATA_VALUE_TYPE_BOOLEAN:
-            write(oanls_fd, "[bollean]", strlen("[bolleam]"));
-            break;
-        case FLV_DATA_VALUE_TYPE_ECMA:
-            write(oanls_fd, "[ecma]", strlen("[ecma]"));
-            break;
-        case FLV_DATA_VALUE_TYPE_OBJECT:
-            write(oanls_fd, "[object]", strlen("[object]"));
-            break;
-        default:
-            write(oanls_fd, "[unknown]", strlen("[unknown]"));
-            break;
     }
 
     return 0;
@@ -244,10 +233,13 @@ static int analysis_data_object_pro(uint8_t** data)
     write(oanls_fd, ": ", 2);
     if (pro_value_tp == FLV_DATA_VALUE_TYPE_STRING) {
         analysis_data_string(data);
+    } else if (pro_value_tp == FLV_DATA_VALUE_TYPE_NUMBER) {
+        analysis_data_number(data);
     } else
         return -1;
 
-    print_data_pro_type(pro_value_tp);
+    const char* tp_str = print_data_pro_type(pro_value_tp);
+    write(oanls_fd, tp_str, strlen(tp_str));
 
     return 0;
 }
@@ -287,7 +279,8 @@ static int analysis_data_tag_data(uint8_t* tag_data, uint32_t tag_size)
     write(oanls_fd, name, strlen(name));
 
     uint8_t value_tp = *(tag_data++);
-    print_data_pro_type(value_tp);
+    const char* tp_str = print_data_pro_type(value_tp);
+    write(oanls_fd, tp_str, strlen(tp_str));
     write(oanls_fd, "\n", 1);
 
     if (value_tp == FLV_DATA_VALUE_TYPE_ECMA) {

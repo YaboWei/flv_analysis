@@ -11,5 +11,6 @@ char* flv_frame_type_name(uint8_t frame_type);
 char* flv_codec_name(uint8_t codec_id);
 char* flv_avc_packet_type_name(uint8_t avc_packet_type);
 char* avc_nal_unit_type_name(uint8_t nal_type);
+char* print_data_pro_type(uint8_t tp);
 
 #endif //FLV_ANALYSIS_UTILS_H

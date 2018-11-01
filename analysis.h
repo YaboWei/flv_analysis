@@ -40,6 +40,7 @@
 #define SPLIT_LINE "---------------------------------------------\n"
 
 #define ERR_INPUT_EOF 100
+#define NALU_DATA_MAX_DUMP_SIZE 32
 
 int analysis();
 
