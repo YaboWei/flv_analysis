@@ -301,7 +301,7 @@ static int analysis_data_tag_data(uint8_t* tag_data, uint32_t tag_size)
 
 static int analysis_tag()
 {
-    int size = 0;
+    int rd_size = 0;
     write(oanls_fd, SPLIT_LINE, strlen(SPLIT_LINE));
     int32_t pos = lseek(iflv_fd, 0, SEEK_CUR);
     if (pos == -1) {
@@ -310,13 +310,10 @@ static int analysis_tag()
     }
 
     uint8_t tag_header[FLV_TAG_HEADER_SIZE];
-    if ((size = read(iflv_fd, tag_header, FLV_TAG_HEADER_SIZE)) != FLV_TAG_HEADER_SIZE) {
-        if (errno != 0) {
-            fprintf(stderr, "read flv tag header failed: %s(%d), wants:%d, got:%d\n",
-                strerror(errno), errno, FLV_TAG_HEADER_SIZE, size);
-            return errno;
-        }
-        return ERR_INPUT_EOF;
+    if ((rd_size = read(iflv_fd, tag_header, FLV_TAG_HEADER_SIZE)) != FLV_TAG_HEADER_SIZE) {
+        fprintf(stdout, "read flv tag header failed: %s(%d), wants:%d, got:%d\n",
+            strerror(errno), errno, FLV_TAG_HEADER_SIZE, rd_size);
+        return errno ? errno : ERR_INPUT_EOF;
     }
 
     uint8_t tag_type = tag_header[0] & 0x1f;
@@ -329,12 +326,9 @@ static int analysis_tag()
         return errno;
     }
 
-    if (read(iflv_fd, tag_data, tag_size) != tag_size) {
-        if (errno != 0) {
-            fprintf(stderr, "read flv tag data failed: %s(%d), tag_size:%u\n", strerror(errno), errno, tag_size);
-            return errno;
-        }
-        return ERR_INPUT_EOF;
+    if ((rd_size = read(iflv_fd, tag_data, tag_size)) != tag_size) {
+        fprintf(stdout, "read flv tag data failed: %s(%d), tag_size:%u, got %u\n", strerror(errno), errno, tag_size, rd_size);
+        return errno ? errno : ERR_INPUT_EOF;
     }
 
     char tag_header_desc[100] = {0};
@@ -353,8 +347,8 @@ static int analysis_tag()
     uint32_t pre_tag_size = 0;
     uint8_t pre_tag_size_data[4] = {0};
     char pre_tag_size_str[100] = {0};
-    if ((size = read(iflv_fd, pre_tag_size_data, FLV_TAGSIZE_SIZE)) != FLV_TAGSIZE_SIZE) {
-        fprintf(stderr, "read flv pre tag size failed: %s(%d), wants:%d, got:%d\n", strerror(errno), errno, FLV_TAGSIZE_SIZE, size);
+    if ((rd_size = read(iflv_fd, pre_tag_size_data, FLV_TAGSIZE_SIZE)) != FLV_TAGSIZE_SIZE) {
+        fprintf(stdout, "read flv pre tag size failed: %s(%d), wants:%d, got:%d\n", strerror(errno), errno, FLV_TAGSIZE_SIZE, rd_size);
         return errno;
     }
     pre_tag_size = read_4bytes_to_uint32(pre_tag_size_data);
