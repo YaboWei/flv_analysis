@@ -6,6 +6,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <inttypes.h>
 
 #include "analysis.h"
 #include "utils.h"
@@ -92,13 +93,13 @@ static int analysis_video_tag_data(const uint8_t* tag_data, uint32_t tag_size)
     int32_t CompositionTime = -1;
     if (CodecID == FLV_VIDEO_CODEC_AVC) {
         AVCPacketType = tag_data[header_size++];
-        CompositionTime = (tag_data[header_size] << 16) + (tag_data[header_size+1] << 8) + tag_data[header_size+2];
+        CompositionTime = (((tag_data[header_size] << 16) + (tag_data[header_size+1] << 8) + tag_data[header_size+2]) + 0xff800000) ^ 0xff800000;
         header_size += 3;
     }
 
     char tag_header_desc[100];
     snprintf(tag_header_desc, sizeof(tag_header_desc),
-            "VideoTagHeader:\n    %s(%u), %s(%u), %s(%u), %u\n",
+            "VideoTagHeader:\n    %s(%u), %s(%u), %s(%u), %d\n",
             flv_frame_type_name(FrameType), FrameType,
             flv_codec_name(CodecID), CodecID,
             CodecID == FLV_VIDEO_CODEC_AVC ? flv_avc_packet_type_name(AVCPacketType) : "unused", AVCPacketType,
@@ -114,11 +115,11 @@ static int analysis_video_tag_data(const uint8_t* tag_data, uint32_t tag_size)
     int index = header_size;
     if (AVCPacketType == 0) {
         //AVCDecoderConfigurationRecord
-        write(oanls_fd, "sequence header:\n", strlen("sequence header:\n"));
+        write(oanls_fd, "video sequence header:", strlen("video sequence header:"));
         int i = 0;
         int dump_size = (tag_size - header_size) < NALU_DATA_MAX_DUMP_SIZE ? (tag_size - header_size) : NALU_DATA_MAX_DUMP_SIZE;
         char nal_desc[1024] = {0};
-        snprintf(nal_desc + strlen(nal_desc), sizeof(nal_desc) - strlen(nal_desc), "    ");
+        //snprintf(nal_desc + strlen(nal_desc), sizeof(nal_desc) - strlen(nal_desc), "    ");
         for (i = 0; i < dump_size; i++) {
             snprintf(nal_desc + strlen(nal_desc), sizeof(nal_desc) - strlen(nal_desc), "%2x%c",
                     tag_data[index+i], i < dump_size-1 ? ' ' : '\n');
@@ -140,7 +141,7 @@ static int analysis_video_tag_data(const uint8_t* tag_data, uint32_t tag_size)
         snprintf(nal_desc + strlen(nal_desc), sizeof(nal_desc) - strlen(nal_desc), "data:");
         int i = 0;
         int dump_size = nal_size < NALU_DATA_MAX_DUMP_SIZE ? nal_size : NALU_DATA_MAX_DUMP_SIZE;
-        for (i = 1; i < dump_size; i++) {
+        for (i = 0; i < dump_size; i++) {
             snprintf(nal_desc + strlen(nal_desc), sizeof(nal_desc) - strlen(nal_desc), "%2x%c",
                     tag_data[index+i], i < dump_size-1 ? ' ' : '\n');
         }
