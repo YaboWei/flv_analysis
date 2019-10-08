@@ -83,6 +83,10 @@ static int analysis_audio_tag_data(const uint8_t* tag_data, uint32_t tag_size)
     return 0;
 }
 
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+
 static int analysis_video_tag_data(const uint8_t* tag_data, uint32_t tag_size)
 {
     int header_size = 0;
@@ -113,10 +117,19 @@ static int analysis_video_tag_data(const uint8_t* tag_data, uint32_t tag_size)
 
 
     int index = header_size;
+    static v_seq_index = 0;
     if (AVCPacketType == 0) {
         //AVCDecoderConfigurationRecord
-        write(oanls_fd, "video sequence header:", strlen("video sequence header:"));
+        char vsh_desc[100] = {0};
+        snprintf(vsh_desc, sizeof(vsh_desc), "video sequence header(%d bytes):\n", tag_size - header_size);
+        write(oanls_fd, vsh_desc, strlen(vsh_desc));
+
         int i = 0;
+        if (tag_size - header_size <= 4) {
+            fprintf(stderr, "video sequence header missing data...\n");
+            return -1;
+        }
+
         int dump_size = (tag_size - header_size) < NALU_DATA_MAX_DUMP_SIZE ? (tag_size - header_size) : NALU_DATA_MAX_DUMP_SIZE;
         char nal_desc[1024] = {0};
         //snprintf(nal_desc + strlen(nal_desc), sizeof(nal_desc) - strlen(nal_desc), "    ");
@@ -129,6 +142,9 @@ static int analysis_video_tag_data(const uint8_t* tag_data, uint32_t tag_size)
     }
 
     write(oanls_fd, "nals:\n", strlen("nals:\n"));
+        char nal_desc[1024] = {0};
+        snprintf(nal_desc, 1024, "size: %d\n", tag_size - header_size);
+        write(oanls_fd, nal_desc, strlen(nal_desc));
     // One or more NALUs (Full frames are required)
     while (index < tag_size - header_size) {
         uint32_t nal_size = (tag_data[index] << 24) + (tag_data[index+1] << 16) + (tag_data[index+2] << 8) + tag_data[index+3];
@@ -340,8 +356,11 @@ static int analysis_tag()
 
     if (tag_type == FLV_TAG_TYPE_AUDIO)
         analysis_audio_tag_data(tag_data, tag_size);
-    if (tag_type == FLV_TAG_TYPE_VIDEO)
-        analysis_video_tag_data(tag_data, tag_size);
+    if (tag_type == FLV_TAG_TYPE_VIDEO) {
+        if (analysis_video_tag_data(tag_data, tag_size) < 0) {
+            return -1;
+        }
+    }
     if (tag_type == FLV_TAG_TYPE_DATA)
         analysis_data_tag_data(tag_data, tag_size);
 
