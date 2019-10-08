@@ -117,7 +117,6 @@ static int analysis_video_tag_data(const uint8_t* tag_data, uint32_t tag_size)
 
 
     int index = header_size;
-    static v_seq_index = 0;
     if (AVCPacketType == 0) {
         //AVCDecoderConfigurationRecord
         char vsh_desc[100] = {0};
@@ -130,8 +129,10 @@ static int analysis_video_tag_data(const uint8_t* tag_data, uint32_t tag_size)
             return -1;
         }
 
+
         int dump_size = (tag_size - header_size) < NALU_DATA_MAX_DUMP_SIZE ? (tag_size - header_size) : NALU_DATA_MAX_DUMP_SIZE;
         char nal_desc[1024] = {0};
+        snprintf(nal_desc + strlen(nal_desc), sizeof(nal_desc) - strlen(nal_desc), "    vsq,size:%u,", tag_size - header_size);
         //snprintf(nal_desc + strlen(nal_desc), sizeof(nal_desc) - strlen(nal_desc), "    ");
         for (i = 0; i < dump_size; i++) {
             snprintf(nal_desc + strlen(nal_desc), sizeof(nal_desc) - strlen(nal_desc), "%2x%c",
