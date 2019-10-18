@@ -130,7 +130,7 @@ static int analysis_video_tag_data(const uint8_t* tag_data, uint32_t tag_size)
         }
 
 
-        int dump_size = (tag_size - header_size) < NALU_DATA_MAX_DUMP_SIZE ? (tag_size - header_size) : NALU_DATA_MAX_DUMP_SIZE;
+        int dump_size = (tag_size - header_size);
         char nal_desc[1024] = {0};
         snprintf(nal_desc + strlen(nal_desc), sizeof(nal_desc) - strlen(nal_desc), "    vsq,size:%u,", tag_size - header_size);
         //snprintf(nal_desc + strlen(nal_desc), sizeof(nal_desc) - strlen(nal_desc), "    ");
@@ -158,6 +158,10 @@ static int analysis_video_tag_data(const uint8_t* tag_data, uint32_t tag_size)
         snprintf(nal_desc + strlen(nal_desc), sizeof(nal_desc) - strlen(nal_desc), "data:");
         int i = 0;
         int dump_size = nal_size < NALU_DATA_MAX_DUMP_SIZE ? nal_size : NALU_DATA_MAX_DUMP_SIZE;
+        if (nal_type == 31) {
+            dump_size = nal_size;
+        }
+
         for (i = 0; i < dump_size; i++) {
             snprintf(nal_desc + strlen(nal_desc), sizeof(nal_desc) - strlen(nal_desc), "%2x%c",
                     tag_data[index+i], i < dump_size-1 ? ' ' : '\n');
@@ -333,10 +337,16 @@ static int analysis_tag()
             strerror(errno), errno, FLV_TAG_HEADER_SIZE, rd_size);
         return errno ? errno : ERR_INPUT_EOF;
     }
+    int header_i = 0;
 
-    uint8_t tag_type = tag_header[0] & 0x1f;
-    uint32_t tag_size = read_3bytes_to_uint32(&tag_header[1]);;
-    int64_t tag_ts = read_3bytes_to_uint32(&tag_header[4]);
+    uint8_t tag_type = tag_header[header_i] & 0x1f;
+    header_i += 1;
+    uint32_t tag_size = read_3bytes_to_uint32(&tag_header[header_i]);;
+    header_i += 3;
+    int64_t tag_ts = read_3bytes_to_uint32(&tag_header[header_i]);
+    header_i += 3;
+    tag_ts |= tag_header[header_i] << 24;
+    header_i += 1;
 
     uint8_t* tag_data = (uint8_t*)malloc(tag_size);
     if (tag_data == NULL) {
@@ -351,7 +361,7 @@ static int analysis_tag()
 
     char tag_header_desc[100] = {0};
     snprintf(tag_header_desc, sizeof(tag_header_desc),
-            "FLV Tag:\n    type:%s, size:%u, ts: %lld, rpos:0x%x(%u)\n",
+            "FLV Tag:\n    type:%s, size:%u, ts: %ld, rpos:0x%x(%u)\n",
             tag_type_name(tag_type), tag_size, tag_ts, (uint32_t)pos, pos);
     write(oanls_fd, tag_header_desc, strlen(tag_header_desc));
 
