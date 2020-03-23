@@ -87,7 +87,7 @@ static int analysis_audio_tag_data(const uint8_t* tag_data, uint32_t tag_size)
 #include <sys/stat.h>
 #include <fcntl.h>
 
-static int analysis_video_tag_data(const uint8_t* tag_data, uint32_t tag_size)
+static int analysis_video_tag_data(const uint8_t* tag_data, uint32_t tag_size, uint64_t tag_ts)
 {
     int header_size = 0;
     uint8_t FrameType   = (tag_data[header_size] & 0xf0) >> 4;
@@ -95,11 +95,9 @@ static int analysis_video_tag_data(const uint8_t* tag_data, uint32_t tag_size)
 
     uint8_t AVCPacketType = -1;
     int32_t CompositionTime = -1;
-    if (CodecID == FLV_VIDEO_CODEC_AVC) {
-        AVCPacketType = tag_data[header_size++];
-        CompositionTime = (((tag_data[header_size] << 16) + (tag_data[header_size+1] << 8) + tag_data[header_size+2]) + 0xff800000) ^ 0xff800000;
-        header_size += 3;
-    }
+    AVCPacketType = tag_data[header_size++];
+    CompositionTime = (((tag_data[header_size] << 16) + (tag_data[header_size+1] << 8) + tag_data[header_size+2]) + 0xff800000) ^ 0xff800000;
+    header_size += 3;
 
     char tag_header_desc[100];
     snprintf(tag_header_desc, sizeof(tag_header_desc),
@@ -110,11 +108,6 @@ static int analysis_video_tag_data(const uint8_t* tag_data, uint32_t tag_size)
             CompositionTime);
 
     write(oanls_fd, tag_header_desc, strlen(tag_header_desc));
-
-    if (CodecID != FLV_VIDEO_CODEC_AVC) {
-        return 0;
-    }
-
 
     int index = header_size;
     if (AVCPacketType == 0) {
@@ -149,22 +142,35 @@ static int analysis_video_tag_data(const uint8_t* tag_data, uint32_t tag_size)
     // One or more NALUs (Full frames are required)
     while (index < tag_size - header_size) {
         uint32_t nal_size = (tag_data[index] << 24) + (tag_data[index+1] << 16) + (tag_data[index+2] << 8) + tag_data[index+3];
-        uint8_t nal_type = tag_data[index+4] & 0x1f;
+        uint8_t nal_type = 0;
+        if (CodecID == FLV_VIDEO_CODEC_AVC) {
+            nal_type = tag_data[index+4] & 0x1f;
+        } else {
+            nal_type = (tag_data[index+4] & 0x7e) >> 1;
+        }
         index += 4;
         char nal_desc[1024] = {0};
         snprintf(nal_desc + strlen(nal_desc), sizeof(nal_desc) - strlen(nal_desc), "    tp:%u,size:%u,",
                 nal_type, nal_size);
 
-        snprintf(nal_desc + strlen(nal_desc), sizeof(nal_desc) - strlen(nal_desc), "data:");
         int i = 0;
         int dump_size = nal_size < NALU_DATA_MAX_DUMP_SIZE ? nal_size : NALU_DATA_MAX_DUMP_SIZE;
-        if (nal_type == 31) {
+        if (nal_type == 31 || nal_type == 63) {
             dump_size = nal_size;
+            snprintf(nal_desc + strlen(nal_desc), sizeof(nal_desc) - strlen(nal_desc), "pts:%ld,", (tag_ts+CompositionTime));
         }
 
+        snprintf(nal_desc + strlen(nal_desc), sizeof(nal_desc) - strlen(nal_desc), "data:");
         for (i = 0; i < dump_size; i++) {
             snprintf(nal_desc + strlen(nal_desc), sizeof(nal_desc) - strlen(nal_desc), "%2x%c",
-                    tag_data[index+i], i < dump_size-1 ? ' ' : '\n');
+                    tag_data[index+i], i < nal_size - 1 ? ' ' : '\n');
+        }
+        if (dump_size < nal_size) {
+            snprintf(nal_desc + strlen(nal_desc), sizeof(nal_desc) - strlen("......"), "......");
+            for (i = nal_size-NALU_DATA_MAX_DUMP_SIZE; i < nal_size; i++) {
+                snprintf(nal_desc + strlen(nal_desc), sizeof(nal_desc) - strlen(nal_desc), "%2x%c",
+                        tag_data[index+i], i < nal_size - 1 ? ' ' : '\n');
+            }
         }
         write(oanls_fd, nal_desc, strlen(nal_desc));
         index += nal_size;
@@ -368,7 +374,7 @@ static int analysis_tag()
     if (tag_type == FLV_TAG_TYPE_AUDIO)
         analysis_audio_tag_data(tag_data, tag_size);
     if (tag_type == FLV_TAG_TYPE_VIDEO) {
-        if (analysis_video_tag_data(tag_data, tag_size) < 0) {
+        if (analysis_video_tag_data(tag_data, tag_size, tag_ts) < 0) {
             return -1;
         }
     }
